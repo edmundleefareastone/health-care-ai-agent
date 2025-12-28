@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, MapPin, Calendar, Stethoscope, ChevronRight, AlertCircle } from 'lucide-react';
+import { User, MapPin, Stethoscope, ChevronRight, AlertCircle } from 'lucide-react';
 import { Patient } from '../types';
 import { useApp } from '../context/AppContext';
 

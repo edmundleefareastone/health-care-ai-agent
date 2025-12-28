@@ -4,8 +4,7 @@ import {
   Patient, 
   MeasurementType, 
   AlertPriority,
-  measurementTypeInfo,
-  FollowUpTask
+  measurementTypeInfo
 } from '../types';
 
 /**
@@ -372,7 +371,8 @@ ${this.config.capabilities.map((c, i) => `${i + 1}. ${c}`).join('\n')}
     trendAnalysis: { trend: 'up' | 'down' | 'stable' },
     diagnosisRisk: { riskLevel: 'high' | 'medium' | 'low' }
   ): { alert: AIAlert | null; priority: AlertPriority; confidence: number; reasoning: string } {
-    const typeInfo = measurementTypeInfo[measurement.type];
+    const _typeInfo = measurementTypeInfo[measurement.type];
+    void _typeInfo; // Reserved for future use
     
     // 計算異常程度
     let severity = 0;
@@ -491,7 +491,9 @@ ${this.config.capabilities.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 病患診斷：${patient.diagnosis}`;
   }
 
-  private generateSuggestion(measurement: Measurement, patient: Patient, priority: AlertPriority): string {
+  private generateSuggestion(measurement: Measurement, _patient: Patient, priority: AlertPriority): string {
+    void measurement; // Reserved for future use
+    void _patient; // Reserved for future use
     const suggestions: string[] = [];
     
     if (priority === 'critical') {
