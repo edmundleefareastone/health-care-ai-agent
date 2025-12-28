@@ -173,6 +173,7 @@ const AIAgentPanel: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [latestAnalysis, setLatestAnalysis] = useState<AgentAnalysisResult | null>(null);
   const [showThinking, setShowThinking] = useState(false);
+  const [isNormalResult, setIsNormalResult] = useState<boolean | null>(null);
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
   const lastAnalyzedVersionRef = useRef(-1);
   const isInitializedRef = useRef(false);
@@ -259,6 +260,7 @@ const AIAgentPanel: React.FC = () => {
       const thinkingDuration = result.thinkingProcess.length * 800 + 500;
       setTimeout(() => {
         if (result.alert) {
+          setIsNormalResult(false);
           startTyping(healthCareAgent.generatePersonalizedSuggestion(result.alert, patient));
           // 打字完成後才觸發提醒摘要動畫（預估打字時間）
           const typingDuration = 3000; // 預估打字時間
@@ -268,7 +270,8 @@ const AIAgentPanel: React.FC = () => {
         } else {
           // 正常數據時清除之前的動畫提醒
           clearNewAlertType();
-          startTyping(`✅ 自動分析完成！${patient.name} 的最新量測數據在正常範圍內，請繼續保持追蹤。`);
+          setIsNormalResult(true);
+          startTyping(`✅ 分析完成！${patient.name} 的數據正常，一切正常！目前狀況良好，各項指標均正常且保持穩定。請繼續維持正常追蹤。`);
         }
       }, thinkingDuration);
     }
@@ -385,17 +388,45 @@ const AIAgentPanel: React.FC = () => {
                 <p className="text-gray-700 text-base">{latestAnalysis.alert.title}</p>
               </div>
             )}
+
+            {thinkingComplete && !latestAnalysis?.alert && (
+              <div className="mt-4 pt-4 border-t border-green-200">
+                <div className="flex items-center space-x-2 text-green-600 mb-2">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="font-medium text-base">分析結論</span>
+                </div>
+                <p className="text-green-700 text-base">✅ 數據正常，一切正常，無需警示</p>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* 底部固定區域 - 訊息和狀態 */}
       <div className="flex-shrink-0 border-t border-gray-200 bg-white p-4 space-y-3">
-        {/* 訊息區域 */}
-        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+        {/* 訊息區域 - 根據結果顯示不同背景色 */}
+        <div className={`rounded-xl p-4 border transition-colors duration-500 ${
+          isNormalResult === true 
+            ? 'bg-green-50 border-green-200' 
+            : isNormalResult === false 
+              ? 'bg-orange-50 border-orange-200'
+              : 'bg-gray-50 border-gray-100'
+        }`}>
           <div className="flex items-start space-x-3">
-            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <MessageCircle className="w-5 h-5 text-indigo-600" />
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+              isNormalResult === true 
+                ? 'bg-green-100' 
+                : isNormalResult === false 
+                  ? 'bg-orange-100'
+                  : 'bg-indigo-100'
+            }`}>
+              <MessageCircle className={`w-5 h-5 ${
+                isNormalResult === true 
+                  ? 'text-green-600' 
+                  : isNormalResult === false 
+                    ? 'text-orange-600'
+                    : 'text-indigo-600'
+              }`} />
             </div>
             <div 
               ref={messageContainerRef}
@@ -404,7 +435,13 @@ const AIAgentPanel: React.FC = () => {
               <p className="text-base text-gray-700 whitespace-pre-line leading-relaxed">
                 {displayedText}
                 {isTyping && (
-                  <span className="inline-block w-2 h-5 bg-indigo-500 ml-0.5 animate-pulse"></span>
+                  <span className={`inline-block w-2 h-5 ml-0.5 animate-pulse ${
+                    isNormalResult === true 
+                      ? 'bg-green-500' 
+                      : isNormalResult === false 
+                        ? 'bg-orange-500'
+                        : 'bg-indigo-500'
+                  }`}></span>
                 )}
               </p>
             </div>
@@ -452,10 +489,15 @@ const highlightKeywords = (text: string): React.ReactNode => {
     { regex: /(\d+\.?\d*\s*(?:mmHg|mg\/dL|°C|bpm|%|歲))/g, className: 'text-blue-600 font-semibold' },
     // 警示級別
     { regex: /(【critical】|【high】|【medium】|【low】|緊急|高|中|低)/g, className: 'text-red-600 font-bold' },
-    // 正常/異常狀態
-    { regex: /(正常範圍內|不在正常範圍|超出正常範圍|異常|偏高|偏低|正常)/g, className: 'text-orange-600 font-semibold' },
-    // 趨勢描述
-    { regex: /(上升趨勢|下降趨勢|穩定|波動較大|持續偏高|持續偏低)/g, className: 'text-purple-600 font-medium' },
+    // 正常狀態 - 綠色
+    { regex: /(正常範圍內|數據正常|狀況良好|維持正常|穩定正常|一切正常|均正常|皆正常)/g, className: 'text-green-600 font-semibold' },
+    // 異常狀態 - 橙/紅色
+    { regex: /(不在正常範圍|超出正常範圍|異常|偏高|偏低|過高|過低|危險|警戒)/g, className: 'text-orange-600 font-semibold' },
+    // 單獨的「正常」- 綠色
+    { regex: /(?<!不|異|非)(正常)(?!範圍)/g, className: 'text-green-600 font-semibold' },
+    // 趨勢描述 - 負面用紅色，正面用綠色
+    { regex: /(上升趨勢|波動較大|持續偏高|持續偏低)/g, className: 'text-orange-600 font-medium' },
+    { regex: /(下降趨勢|穩定|趨於穩定|保持穩定)/g, className: 'text-green-600 font-medium' },
     // 範圍數值
     { regex: /(\d+[-~]\d+)/g, className: 'text-teal-600 font-medium' },
   ];
