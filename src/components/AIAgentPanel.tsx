@@ -169,7 +169,7 @@ const useThinkingStepsTypewriter = (steps: ThinkingStep[], speed: number = 20) =
 };
 
 const AIAgentPanel: React.FC = () => {
-  const { measurements, patients, measurementVersion, addAlert } = useApp();
+  const { measurements, patients, measurementVersion, addAlert, clearNewAlertType } = useApp();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [latestAnalysis, setLatestAnalysis] = useState<AgentAnalysisResult | null>(null);
   const [showThinking, setShowThinking] = useState(false);
@@ -260,16 +260,15 @@ const AIAgentPanel: React.FC = () => {
       setTimeout(() => {
         if (result.alert) {
           startTyping(healthCareAgent.generatePersonalizedSuggestion(result.alert, patient));
-        } else {
-          startTyping(`✅ 自動分析完成！${patient.name} 的最新量測數據在正常範圍內，請繼續保持追蹤。`);
-        }
-        
-        // 打字完成後才觸發提醒摘要動畫（預估打字時間）
-        if (result.alert) {
+          // 打字完成後才觸發提醒摘要動畫（預估打字時間）
           const typingDuration = 3000; // 預估打字時間
           setTimeout(() => {
             addAlert(result.alert!);
           }, typingDuration);
+        } else {
+          // 正常數據時清除之前的動畫提醒
+          clearNewAlertType();
+          startTyping(`✅ 自動分析完成！${patient.name} 的最新量測數據在正常範圍內，請繼續保持追蹤。`);
         }
       }, thinkingDuration);
     }

@@ -62,6 +62,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (newAlertType) {
       setAnimatingType(newAlertType);
+    } else {
+      // 當 newAlertType 被清除時（如正常數據），也清除動畫
+      setAnimatingType(null);
     }
   }, [newAlertType]);
   
