@@ -487,17 +487,18 @@ const highlightKeywords = (text: string): React.ReactNode => {
   const patterns = [
     // 數值（包含單位）
     { regex: /(\d+\.?\d*\s*(?:mmHg|mg\/dL|°C|bpm|%|歲))/g, className: 'text-blue-600 font-semibold' },
-    // 警示級別
-    { regex: /(【critical】|【high】|【medium】|【low】|緊急|高|中|低)/g, className: 'text-red-600 font-bold' },
-    // 正常狀態 - 綠色
-    { regex: /(正常範圍內|數據正常|狀況良好|維持正常|穩定正常|一切正常|均正常|皆正常)/g, className: 'text-green-600 font-semibold' },
-    // 異常狀態 - 橙/紅色
-    { regex: /(不在正常範圍|超出正常範圍|異常|偏高|偏低|過高|過低|危險|警戒)/g, className: 'text-orange-600 font-semibold' },
-    // 單獨的「正常」- 綠色
+    // 警示級別標籤
+    { regex: /(【critical】|【high】|【medium】|【low】)/g, className: 'text-red-600 font-bold' },
+    // 正常狀態 - 綠色（包含否定高風險的語句）
+    { regex: /(在正常範圍內|數據正常|狀況良好|維持正常|一切正常|均正常|皆正常|無直接.*風險關聯|無.*高風險|風險較低|低風險|正在恢復正常|正在回升)/g, className: 'text-green-600 font-semibold' },
+    // 異常狀態 - 橙/紅色（完整詞組，避免單字誤判）
+    { regex: /(高於正常範圍|低於正常範圍|不在正常範圍|超出正常範圍|數值異常|指標異常|偏高|偏低|過高|過低|危險值|高風險|中風險|警戒值|緊急處理|持續發燒|持續血壓偏高|持續血壓偏低|持續血糖偏高|持續血糖偏低|持續心率過快|持續心率過慢|持續體溫過低|持續血氧不足|持續處於異常範圍|病情惡化)/g, className: 'text-orange-600 font-semibold' },
+    // 單獨的「正常」- 綠色（但要排除「異常」「不正常」等）
     { regex: /(?<!不|異|非)(正常)(?!範圍)/g, className: 'text-green-600 font-semibold' },
-    // 趨勢描述 - 負面用紅色，正面用綠色
-    { regex: /(上升趨勢|波動較大|持續偏高|持續偏低)/g, className: 'text-orange-600 font-medium' },
-    { regex: /(下降趨勢|穩定|趨於穩定|保持穩定)/g, className: 'text-green-600 font-medium' },
+    // 趨勢描述 - 正面用綠色
+    { regex: /(穩定且在正常範圍內|數值穩定|狀況良好)/g, className: 'text-green-600 font-medium' },
+    // 趨勢描述 - 負面用橙色
+    { regex: /(上升趨勢|下降趨勢|波動較大|持續偏高|持續偏低|急劇上升|急劇下降|穩定但持續)/g, className: 'text-orange-600 font-medium' },
     // 範圍數值
     { regex: /(\d+[-~]\d+)/g, className: 'text-teal-600 font-medium' },
   ];

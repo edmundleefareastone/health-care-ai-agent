@@ -111,14 +111,16 @@ ${this.config.capabilities.map((c, i) => `${i + 1}. ${c}`).join('\n')}
     const typeInfo = measurementTypeInfo[measurement.type];
     const normalRange = typeInfo.normalRange;
     const isInRange = this.checkNormalRange(measurement, normalRange);
+    const valueDirection = this.checkValueDirection(measurement, normalRange);
+    const directionText = this.getDirectionText(valueDirection);
     
     thinkingProcess.push({
       step: ++stepCount,
       action: '比對正常參考範圍',
-      observation: `${typeInfo.name}正常範圍：${this.formatNormalRange(measurement.type, normalRange)}，目前數值${isInRange ? '在' : '不在'}正常範圍內`,
+      observation: `${typeInfo.name}正常範圍：${this.formatNormalRange(measurement.type, normalRange)}，目前數值${directionText}`,
       reasoning: isInRange 
         ? '數值在正常範圍內，但仍需考慮病患個人狀況和趨勢變化'
-        : '數值超出正常範圍，需要進一步評估嚴重程度'
+        : `數值${valueDirection === 'high' ? '偏高' : '偏低'}，需要進一步評估嚴重程度`
     });
 
     // Step 4: 趨勢分析
@@ -279,16 +281,41 @@ ${this.config.capabilities.map((c, i) => `${i + 1}. ${c}`).join('\n')}
     return measurement.value >= range.min && measurement.value <= range.max;
   }
 
+  // 判斷數值是偏高還是偏低
+  private checkValueDirection(measurement: Measurement, range: { min: number; max: number; secondaryMin?: number; secondaryMax?: number }): 'high' | 'low' | 'normal' {
+    if (measurement.type === 'bloodPressure') {
+      if (measurement.value > range.max || (measurement.secondaryValue && measurement.secondaryValue > (range.secondaryMax || 100))) {
+        return 'high';
+      }
+      if (measurement.value < range.min || (measurement.secondaryValue && measurement.secondaryValue < (range.secondaryMin || 0))) {
+        return 'low';
+      }
+      return 'normal';
+    }
+    if (measurement.value > range.max) return 'high';
+    if (measurement.value < range.min) return 'low';
+    return 'normal';
+  }
+
+  // 根據方向生成描述文字
+  private getDirectionText(direction: 'high' | 'low' | 'normal'): string {
+    switch (direction) {
+      case 'high': return '高於正常範圍';
+      case 'low': return '低於正常範圍';
+      default: return '在正常範圍內';
+    }
+  }
+
   private analyzeTrend(
     current: Measurement,
     history: Measurement[]
-  ): { observation: string; reasoning: string; trend: 'up' | 'down' | 'stable' } {
-    const sameTpye = history
+  ): { observation: string; reasoning: string; trend: 'up' | 'down' | 'stable'; isAbnormalStable?: boolean } {
+    const sameType = history
       .filter(m => m.type === current.type)
       .sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime())
       .slice(0, 5);
 
-    if (sameTpye.length < 2) {
+    if (sameType.length < 2) {
       return {
         observation: '歷史數據不足，無法進行趨勢分析',
         reasoning: '需要累積更多數據才能判斷趨勢',
@@ -296,26 +323,74 @@ ${this.config.capabilities.map((c, i) => `${i + 1}. ${c}`).join('\n')}
       };
     }
 
-    const values = sameTpye.map(m => m.value);
+    const values = sameType.map(m => m.value);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
     const change = ((current.value - avg) / avg) * 100;
 
+    // 取得正常範圍
+    const typeInfo = measurementTypeInfo[current.type];
+    const normalRange = typeInfo.normalRange;
+    
+    // 判斷平均值是否在正常範圍內
+    const isAvgNormal = avg >= normalRange.min && avg <= normalRange.max;
+    
+    // 判斷平均值的異常方向
+    const getAbnormalDescription = (): string => {
+      if (avg > normalRange.max) {
+        switch (current.type) {
+          case 'temperature': return '持續發燒';
+          case 'bloodPressure': return '持續血壓偏高';
+          case 'bloodSugar': return '持續血糖偏高';
+          case 'heartRate': return '持續心率過快';
+          default: return '持續偏高';
+        }
+      } else if (avg < normalRange.min) {
+        switch (current.type) {
+          case 'temperature': return '持續體溫過低';
+          case 'bloodPressure': return '持續血壓偏低';
+          case 'bloodSugar': return '持續血糖偏低';
+          case 'heartRate': return '持續心率過慢';
+          case 'oxygenSaturation': return '持續血氧不足';
+          default: return '持續偏低';
+        }
+      }
+      return '';
+    };
+
     if (Math.abs(change) < 5) {
-      return {
-        observation: `近期數值穩定，平均值約 ${avg.toFixed(1)}`,
-        reasoning: '數值變化在正常波動範圍內',
-        trend: 'stable'
-      };
+      // 數值穩定，但要判斷是正常穩定還是異常穩定
+      if (isAvgNormal) {
+        return {
+          observation: `近期數值穩定，平均值約 ${avg.toFixed(1)}`,
+          reasoning: '數值穩定且在正常範圍內，狀況良好',
+          trend: 'stable'
+        };
+      } else {
+        // 異常穩定 - 這是需要注意的情況！
+        const abnormalDesc = getAbnormalDescription();
+        return {
+          observation: `近期數值穩定但${abnormalDesc}，平均值約 ${avg.toFixed(1)}`,
+          reasoning: `雖然數值穩定，但持續處於異常範圍，需要關注並評估是否需要介入`,
+          trend: 'stable',
+          isAbnormalStable: true
+        };
+      }
     } else if (change > 0) {
+      const isRisingTowardNormal = avg < normalRange.min && current.value > avg;
       return {
         observation: `數值呈上升趨勢，較平均值高 ${change.toFixed(1)}%`,
-        reasoning: '需注意持續上升是否代表病情變化',
+        reasoning: isRisingTowardNormal 
+          ? '數值正在回升，可能正在恢復正常'
+          : '需注意持續上升是否代表病情惡化',
         trend: 'up'
       };
     } else {
+      const isFallingTowardNormal = avg > normalRange.max && current.value < avg;
       return {
         observation: `數值呈下降趨勢，較平均值低 ${Math.abs(change).toFixed(1)}%`,
-        reasoning: '需評估下降原因及是否需要介入',
+        reasoning: isFallingTowardNormal
+          ? '數值正在下降，可能正在恢復正常'
+          : '需評估下降原因及是否需要介入',
         trend: 'down'
       };
     }
@@ -368,20 +443,28 @@ ${this.config.capabilities.map((c, i) => `${i + 1}. ${c}`).join('\n')}
     measurement: Measurement,
     patient: Patient,
     isInRange: boolean,
-    trendAnalysis: { trend: 'up' | 'down' | 'stable' },
+    trendAnalysis: { trend: 'up' | 'down' | 'stable'; isAbnormalStable?: boolean },
     diagnosisRisk: { riskLevel: 'high' | 'medium' | 'low' }
   ): { alert: AIAlert | null; priority: AlertPriority; confidence: number; reasoning: string } {
-    const _typeInfo = measurementTypeInfo[measurement.type];
-    void _typeInfo; // Reserved for future use
+    const typeInfo = measurementTypeInfo[measurement.type];
     
     // 計算異常程度
     let severity = 0;
     let priority: AlertPriority = 'low';
     let reasoning = '';
 
+    // 判斷數值方向
+    const valueDirection = this.checkValueDirection(measurement, typeInfo.normalRange);
+
     if (!isInRange) {
       severity += 2;
-      reasoning += '數值超出正常範圍；';
+      reasoning += `${typeInfo.name}${valueDirection === 'high' ? '偏高' : '偏低'}；`;
+    }
+
+    // 異常但穩定的情況也需要警示（如持續發燒）
+    if (trendAnalysis.isAbnormalStable) {
+      severity += 1;
+      reasoning += '數值持續處於異常範圍；';
     }
 
     if (diagnosisRisk.riskLevel === 'high') {
